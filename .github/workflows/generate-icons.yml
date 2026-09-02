@@ -1,0 +1,31 @@
+name: Generate app icons
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  icons:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Render clean PNG icons from the vector master
+        run: |
+          convert -background none icon.svg -resize 180x180 apple-touch-icon.png
+          convert -background none icon.svg -resize 192x192 icon-192.png
+          convert -background none icon.svg -resize 512x512 icon-512.png
+          file apple-touch-icon.png icon-192.png icon-512.png
+
+      - name: Commit generated icons
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apple-touch-icon.png icon-192.png icon-512.png
+          git diff --cached --quiet || git commit -m "Regenerate clean app icon PNGs"
+          git push
