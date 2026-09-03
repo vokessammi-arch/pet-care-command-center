@@ -21,29 +21,34 @@
   function fixCare(){const d=load();document.querySelectorAll('#careList .card.task .check').forEach((b,i)=>{if(d.care?.[i]){b.dataset.careId=d.care[i].id;b.setAttribute('onclick',`window.tendToggleCare(${d.care[i].id})`)}})}
   window.tendToggleCare=function(id){const d=load(),t=(d.care||[]).find(x=>x.id==id);if(!t)return;t.done=!t.done;save(d);setTimeout(fixCare,0)};
 
-  // Money fix: use integer cents for calculations and preserve two decimal places.
+  // Money: exact cents math plus edit/delete controls.
   const cents=x=>{const n=Number(String(x??'').trim());return Number.isFinite(n)?Math.round(n*100):0};
   const money=n=>(Math.round(n)/100).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
   function renderMoney(){
     const d=load(),box=document.getElementById('moneyList');if(!box)return;
     const total=(d.expenses||[]).reduce((sum,e)=>sum+cents(e.amount),0);
     const list=(d.expenses||[]).slice().reverse();
-    box.innerHTML=`<div class="card" style="margin-top:0"><div class="muted">Total logged expenses</div><strong style="font-size:26px">$${money(total)}</strong><div class="muted" style="margin-top:4px">${list.length} expense${list.length===1?'':'s'} recorded</div></div>`+(list.length?list.map(x=>`<div class="card"><b>${esc(x.title||'Expense')}</b><div class="muted">${esc(x.date||'')}${x.cat?' · '+esc(x.cat):''}</div><strong>$${money(cents(x.amount))}</strong></div>`).join(''):'<div class="empty">No expenses yet.</div>');
+    box.innerHTML=`<div class="card" style="margin-top:0"><div class="muted">Total logged expenses</div><strong style="font-size:26px">$${money(total)}</strong><div class="muted" style="margin-top:4px">${list.length} expense${list.length===1?'':'s'} recorded</div></div>`+
+      (list.length?list.map(x=>`<div class="card"><div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start"><div style="flex:1"><b>${esc(x.title||'Expense')}</b><div class="muted">${esc(x.date||'')}${x.cat?' · '+esc(x.cat):''}</div><strong>$${money(cents(x.amount))}</strong></div><div style="display:flex;gap:6px;flex-wrap:wrap"><button type="button" onclick="window.tendEditExpense(${x.id})">Edit</button><button type="button" onclick="window.tendDeleteExpense(${x.id})">Delete</button></div></div></div>`).join(''):'<div class="empty">No expenses yet.</div>');
   }
-  function expenseForm(){
+  function expenseForm(existing){
     const modal=document.getElementById('modal'),body=document.getElementById('body');if(!modal||!body)return;
-    body.innerHTML=`<h2>💰 Log expense</h2><label>Description<input id="tendExpenseTitle" placeholder="Hay, vet visit, bedding..."></label><div class="formgrid"><label>Amount<input id="tendExpenseAmount" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00"></label><label>Date<input id="tendExpenseDate" type="date" value="${todayKey()}"></label></div><label>Animal / category<input id="tendExpenseCat" placeholder="Optional"></label><button class="primary" onclick="window.tendSaveExpense()">Save expense</button>`;
+    const e=existing||{};
+    body.innerHTML=`<h2>💰 ${existing?'Edit':'Log'} expense</h2><label>Description<input id="tendExpenseTitle" value="${esc(e.title||'')}" placeholder="Hay, vet visit, bedding..."></label><div class="formgrid"><label>Amount<input id="tendExpenseAmount" type="number" inputmode="decimal" min="0" step="0.01" value="${e.amount??''}" placeholder="0.00"></label><label>Date<input id="tendExpenseDate" type="date" value="${e.date||todayKey()}"></label></div><label>Animal / category<input id="tendExpenseCat" value="${esc(e.cat||'')}" placeholder="Optional"></label><button class="primary" onclick="window.tendSaveExpense(${existing?e.id:'null'})">${existing?'Save changes':'Save expense'}</button>`;
     modal.classList.add('on');
   }
-  window.tendSaveExpense=function(){
+  window.tendSaveExpense=function(id){
     const d=load();d.expenses=Array.isArray(d.expenses)?d.expenses:[];
     const title=document.getElementById('tendExpenseTitle')?.value.trim(),rawAmt=document.getElementById('tendExpenseAmount')?.value.trim();
     if(!title)return alert('Give the expense a description first.');
     if(rawAmt===''||!Number.isFinite(Number(rawAmt))||Number(rawAmt)<0)return alert('Enter a valid expense amount.');
-    const centsValue=cents(rawAmt);
-    d.expenses.push({id:Date.now(),title,amount:(centsValue/100).toFixed(2),date:document.getElementById('tendExpenseDate')?.value||todayKey(),cat:document.getElementById('tendExpenseCat')?.value.trim()||''});
+    const centsValue=cents(rawAmt),date=document.getElementById('tendExpenseDate')?.value||todayKey(),cat=document.getElementById('tendExpenseCat')?.value.trim()||'';
+    if(id!==null&&id!==undefined){const e=d.expenses.find(x=>x.id==id);if(!e)return alert('That expense could not be found.');e.title=title;e.amount=(centsValue/100).toFixed(2);e.date=date;e.cat=cat}
+    else d.expenses.push({id:Date.now(),title,amount:(centsValue/100).toFixed(2),date,cat});
     save(d);document.getElementById('modal')?.classList.remove('on');renderMoney();
   };
+  window.tendEditExpense=function(id){const d=load(),e=(d.expenses||[]).find(x=>x.id==id);if(e)expenseForm(e);else alert('That expense could not be found.')};
+  window.tendDeleteExpense=function(id){if(!confirm('Delete this expense?'))return;const d=load();d.expenses=(d.expenses||[]).filter(x=>x.id!=id);save(d);renderMoney()};
 
   function boot(){
     addUI();ensure();fixCare();renderCalendar();renderMoney();
