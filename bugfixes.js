@@ -1,0 +1,80 @@
+(function(){
+  const KEY='pcc-web-v6';
+  const load=()=>{try{return JSON.parse(localStorage.getItem(KEY)||'{}')}catch{return {}}};
+  const esc=s=>String(s??'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]));
+  const petName=(d,id)=>(d.pets||[]).find(p=>p.id==id)?.name||'Animal';
+
+  function renderCareList(){
+    const d=load(),box=document.getElementById('careList'),summary=document.getElementById('careSummary');
+    if(!box)return;
+    const tasks=Array.isArray(d.care)?d.care:[];
+    const open=tasks.filter(t=>!t.done).length;
+    const done=tasks.filter(t=>t.done).length;
+    if(summary)summary.innerHTML=`<div class="card"><b>${open}</b> open task(s) · <b>${done}</b> completed</div>`;
+    box.innerHTML=tasks.length?tasks.map(t=>`<div class="card task"><button type="button" class="check tend-care-check" data-care-id="${t.id}" aria-label="${t.done?'Mark incomplete':'Mark complete'}">${t.done?'✓':''}</button><div style="flex:1" class="${t.done?'done':''}"><b>${esc(t.title||'Care task')}</b><div class="muted">${esc(t.date||'No date')}${t.repeat&&t.repeat!=='none'?' · '+esc(({daily:'Daily',every2days:'Every 2 days',weekly:'Weekly',biweekly:'Every 2 weeks',monthly:'Monthly',quarterly:'Every 3 months'})[t.repeat]||t.repeat):''}${t.pet?' · '+esc(petName(d,t.pet)):''}</div></div><button type="button" onclick="window.careForm(${t.id})">Edit</button></div>`).join(''):'<div class="empty">No care tasks yet.</div>';
+  }
+
+  function renderFacility(){
+    const d=load(),box=document.getElementById('facilityList');
+    if(!box)return;
+    const lists=Array.isArray(d.checklists)?d.checklists:[];
+    box.innerHTML=lists.length?lists.map(c=>`<div class="card"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center"><b>${esc(c.title||'Checklist')}</b></div>${(c.items||[]).map((i,idx)=>`<label><input type="checkbox" data-checklist-id="${c.id}" data-item-index="${idx}" ${i.done?'checked':''}> ${esc(i.text||'')}</label>`).join('')}</div>`).join(''):'<div class="empty">No facility checklists yet.</div>';
+  }
+
+  function install(){
+    const careList=document.getElementById('careList');
+    if(careList&&!careList.dataset.tendBugfix){
+      careList.dataset.tendBugfix='1';
+      careList.addEventListener('click',function(e){
+        const btn=e.target.closest('.tend-care-check');
+        if(!btn)return;
+        e.preventDefault();e.stopPropagation();
+        const id=btn.dataset.careId;
+        if(window.tendToggleCare)window.tendToggleCare(id);
+        setTimeout(renderCareList,20);
+      });
+    }
+
+    if(window.refreshDashboard&&!window.tendDashboardBugfix){
+      window.tendDashboardBugfix='1';
+      const original=window.refreshDashboard;
+      window.refreshDashboard=function(){
+        original();
+        document.querySelectorAll('#tendTodayCard .tend-overdue .check').forEach(b=>{b.textContent='';});
+      };
+      window.refreshDashboard();
+    }
+
+    window.saveFacility=function(){
+      const d=load();d.checklists=Array.isArray(d.checklists)?d.checklists:[];
+      const name=document.getElementById('fname')?.value.trim();
+      const raw=document.getElementById('fitems')?.value||'';
+      if(!name)return alert('Give the checklist a name first.');
+      const items=raw.split(/\r?\n/).map(x=>x.trim()).filter(Boolean).map(text=>({text,done:false}));
+      d.checklists.push({id:Date.now(),title:name,items});
+      try{localStorage.setItem(KEY,JSON.stringify(d));}catch(e){
+        return alert('Tend could not save this checklist because your local app storage is full. This is not a photo-size problem. We\'ll fix storage handling next.');
+      }
+      document.getElementById('modal')?.classList.remove('on');
+      renderFacility();
+    };
+
+    const facilityList=document.getElementById('facilityList');
+    if(facilityList&&!facilityList.dataset.tendChecklistBugfix){
+      facilityList.dataset.tendChecklistBugfix='1';
+      facilityList.addEventListener('change',function(e){
+        const cb=e.target.closest('input[type="checkbox"][data-checklist-id]');
+        if(!cb)return;
+        const d=load(),c=(d.checklists||[]).find(x=>x.id==cb.dataset.checklistId),i=c?.items?.[Number(cb.dataset.itemIndex)];
+        if(!i)return;
+        i.done=cb.checked;
+        try{localStorage.setItem(KEY,JSON.stringify(d));}catch{}
+      });
+    }
+
+    renderCareList();
+    renderFacility();
+  }
+
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',install);else install();
+})();
