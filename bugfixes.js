@@ -5,14 +5,20 @@
   const petName=(d,id)=>(d.pets||[]).find(p=>p.id==id)?.name||'Animal';
   function compressDataUrl(dataUrl,maxSize=640,quality=.72){return new Promise(resolve=>{if(!dataUrl||!String(dataUrl).startsWith('data:image/'))return resolve(dataUrl);const img=new Image();img.onload=()=>{const scale=Math.min(1,maxSize/Math.max(img.width,img.height));const c=document.createElement('canvas');c.width=Math.max(1,Math.round(img.width*scale));c.height=Math.max(1,Math.round(img.height*scale));const ctx=c.getContext('2d');ctx.drawImage(img,0,0,c.width,c.height);resolve(c.toDataURL('image/jpeg',quality))};img.onerror=()=>resolve(dataUrl);img.src=dataUrl})}
   async function compactPhotos(d){for(const p of (d.pets||[])){if(p.photo&&String(p.photo).startsWith('data:image/'))p.photo=await compressDataUrl(p.photo)}}
+  const repeatLabels={daily:'Daily',every2days:'Every 2 days',weekly:'Weekly',biweekly:'Every 2 weeks',monthly:'Monthly',quarterly:'Every 3 months'};
+  function taskText(t,d){return `${esc(t.date||'No date')}${t.repeat&&t.repeat!=='none'?' · '+esc(repeatLabels[t.repeat]||t.repeat):''}${t.pet?' · '+esc(petName(d,t.pet)):''}`}
+  function careCard(t,d,completed){
+    return `<div class="card task"><button type="button" class="check tend-care-check" data-care-id="${t.id}" aria-label="${completed?'Mark incomplete':'Mark complete'}">${completed?'✓':''}</button><div style="flex:1" class="${completed?'done':''}"><b>${esc(t.title||'Care task')}</b><div class="muted">${taskText(t,d)}</div></div>${!completed?`<button type="button" onclick="window.careForm(${t.id})">Edit</button>`:''}</div>`;
+  }
   function renderCareList(){
     const d=load(),box=document.getElementById('careList'),summary=document.getElementById('careSummary');
     if(!box)return;
     const tasks=Array.isArray(d.care)?d.care:[];
-    const open=tasks.filter(t=>!t.done).length;
-    const done=tasks.filter(t=>t.done).length;
-    if(summary)summary.innerHTML=`<div class="card"><b>${open}</b> open task(s) · <b>${done}</b> completed</div>`;
-    box.innerHTML=tasks.length?tasks.map(t=>`<div class="card task"><button type="button" class="check tend-care-check" data-care-id="${t.id}" aria-label="${t.done?'Mark incomplete':'Mark complete'}">${t.done?'✓':''}</button><div style="flex:1" class="${t.done?'done':''}"><b>${esc(t.title||'Care task')}</b><div class="muted">${esc(t.date||'No date')}${t.repeat&&t.repeat!=='none'?' · '+esc(({daily:'Daily',every2days:'Every 2 days',weekly:'Weekly',biweekly:'Every 2 weeks',monthly:'Monthly',quarterly:'Every 3 months'})[t.repeat]||t.repeat):''}${t.pet?' · '+esc(petName(d,t.pet)):''}</div></div><button type="button" onclick="window.careForm(${t.id})">Edit</button></div>`).join(''):'<div class="empty">No care tasks yet.</div>';
+    const open=tasks.filter(t=>!t.done),done=tasks.filter(t=>t.done);
+    if(summary)summary.innerHTML=`<div class="card"><b>${open.length}</b> open task(s) · <b>${done.length}</b> completed</div>`;
+    const activeHtml=open.length?open.map(t=>careCard(t,d,false)).join(''):'<div class="empty">No open care tasks. 🌱</div>';
+    const completedHtml=done.length?`<div class="card"><div class="title"><div><b>Completed</b><p class="muted" style="margin:4px 0 0">Finished care tasks live here.</p></div><span class="pill">${done.length}</span></div></div>${done.map(t=>careCard(t,d,true)).join('')}`:'';
+    box.innerHTML=activeHtml+completedHtml;
   }
   function renderFacility(){
     const d=load(),box=document.getElementById('facilityList');
