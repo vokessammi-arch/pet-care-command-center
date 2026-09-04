@@ -5,20 +5,20 @@
   const petName=(d,id)=>(d.pets||[]).find(p=>p.id==id)?.name||'Animal';
   function compressDataUrl(dataUrl,maxSize=640,quality=.72){return new Promise(resolve=>{if(!dataUrl||!String(dataUrl).startsWith('data:image/'))return resolve(dataUrl);const img=new Image();img.onload=()=>{const scale=Math.min(1,maxSize/Math.max(img.width,img.height));const c=document.createElement('canvas');c.width=Math.max(1,Math.round(img.width*scale));c.height=Math.max(1,Math.round(img.height*scale));const ctx=c.getContext('2d');ctx.drawImage(img,0,0,c.width,c.height);resolve(c.toDataURL('image/jpeg',quality))};img.onerror=()=>resolve(dataUrl);img.src=dataUrl})}
   async function compactPhotos(d){for(const p of (d.pets||[])){if(p.photo&&String(p.photo).startsWith('data:image/'))p.photo=await compressDataUrl(p.photo)}}
-  const repeatLabels={daily:'Daily',every2days:'Every 2 days',weekly:'Weekly',biweekly:'Every 2 weeks',monthly:'Monthly',quarterly:'Every 3 months'};
+  const repeatLabels={daily:'Daily',every2days:'Every 2 days',weekly:'Every week',biweekly:'Every 2 weeks',monthly:'Every month',quarterly:'Every 3 months'};
+  let careView='active';
   function taskText(t,d){return `${esc(t.date||'No date')}${t.repeat&&t.repeat!=='none'?' · '+esc(repeatLabels[t.repeat]||t.repeat):''}${t.pet?' · '+esc(petName(d,t.pet)):''}`}
-  function careCard(t,d,completed){
-    return `<div class="card task"><button type="button" class="check tend-care-check" data-care-id="${t.id}" aria-label="${completed?'Mark incomplete':'Mark complete'}">${completed?'✓':''}</button><div style="flex:1" class="${completed?'done':''}"><b>${esc(t.title||'Care task')}</b><div class="muted">${taskText(t,d)}</div></div>${!completed?`<button type="button" onclick="window.careForm(${t.id})">Edit</button>`:''}</div>`;
-  }
+  function careCard(t,d,completed){return `<div class="card task"><button type="button" class="check tend-care-check" data-care-id="${t.id}" aria-label="${completed?'Mark incomplete':'Mark complete'}">${completed?'✓':''}</button><div style="flex:1" class="${completed?'done':''}"><b>${esc(t.title||'Care task')}</b><div class="muted">${taskText(t,d)}</div></div>${!completed?`<button type="button" onclick="window.careForm(${t.id})">Edit</button>`:''}</div>`}
   function renderCareList(){
     const d=load(),box=document.getElementById('careList'),summary=document.getElementById('careSummary');
     if(!box)return;
     const tasks=Array.isArray(d.care)?d.care:[];
     const open=tasks.filter(t=>!t.done),done=tasks.filter(t=>t.done);
     if(summary)summary.innerHTML=`<div class="card"><b>${open.length}</b> open task(s) · <b>${done.length}</b> completed</div>`;
+    const tabs=`<div class="tend-care-tabs" style="display:flex;gap:8px;margin:10px 0 14px"><button type="button" class="${careView==='active'?'primary':''}" data-care-view="active" style="flex:1">Active <span class="pill">${open.length}</span></button><button type="button" class="${careView==='completed'?'primary':''}" data-care-view="completed" style="flex:1">Completed <span class="pill">${done.length}</span></button></div>`;
     const activeHtml=open.length?open.map(t=>careCard(t,d,false)).join(''):'<div class="empty">No open care tasks. 🌱</div>';
-    const completedHtml=done.length?`<div class="card"><div class="title"><div><b>Completed</b><p class="muted" style="margin:4px 0 0">Finished care tasks live here.</p></div><span class="pill">${done.length}</span></div></div>${done.map(t=>careCard(t,d,true)).join('')}`:'';
-    box.innerHTML=activeHtml+completedHtml;
+    const completedHtml=done.length?done.map(t=>careCard(t,d,true)).join(''):'<div class="empty">No completed care tasks yet.</div>';
+    box.innerHTML=tabs+(careView==='active'?activeHtml:completedHtml);
   }
   function renderFacility(){
     const d=load(),box=document.getElementById('facilityList');
@@ -31,6 +31,8 @@
     if(careList&&!careList.dataset.tendBugfix){
       careList.dataset.tendBugfix='1';
       careList.addEventListener('click',function(e){
+        const tab=e.target.closest('[data-care-view]');
+        if(tab){e.preventDefault();careView=tab.dataset.careView;renderCareList();return;}
         const btn=e.target.closest('.tend-care-check');
         if(!btn)return;
         e.preventDefault();e.stopPropagation();
@@ -42,10 +44,7 @@
     if(window.refreshDashboard&&!window.tendDashboardBugfix){
       window.tendDashboardBugfix='1';
       const original=window.refreshDashboard;
-      window.refreshDashboard=function(){
-        original();
-        document.querySelectorAll('#tendTodayCard .tend-overdue .check').forEach(b=>{b.textContent='';});
-      };
+      window.refreshDashboard=function(){original();document.querySelectorAll('#tendTodayCard .tend-overdue .check').forEach(b=>{b.textContent='';});};
       window.refreshDashboard();
     }
     window.saveFacility=async function(){
@@ -56,19 +55,13 @@
       const items=raw.split(/\r?\n/).map(x=>x.trim()).filter(Boolean).map(text=>({text,done:false}));
       d.checklists.push({id:Date.now(),title:name,items});
       await compactPhotos(d);
-      try{localStorage.setItem(KEY,JSON.stringify(d));}catch(e){
-        return alert('Tend could not save this checklist because the app has reached its local storage limit. Your checklist is safe in the form, but we need to move photo storage out of localStorage for a permanent fix.');
-      }
-      document.getElementById('modal')?.classList.remove('on');
-      renderFacility();
+      try{localStorage.setItem(KEY,JSON.stringify(d));}catch(e){return alert('Tend could not save this checklist because the app has reached its local storage limit. Your checklist is safe in the form, but we need to move photo storage out of localStorage for a permanent fix.');}
+      document.getElementById('modal')?.classList.remove('on');renderFacility();
     };
     if(window.tendSaveCare&&!window.tendCareSaveBugfix){
       window.tendCareSaveBugfix='1';
       const originalSaveCare=window.tendSaveCare;
-      window.tendSaveCare=function(id){
-        originalSaveCare(id);
-        setTimeout(renderCareList,30);
-      };
+      window.tendSaveCare=function(id){originalSaveCare(id);setTimeout(renderCareList,30);};
       window.saveCare=window.tendSaveCare;
     }
     const facilityList=document.getElementById('facilityList');
@@ -78,13 +71,10 @@
         const cb=e.target.closest('input[type="checkbox"][data-checklist-id]');
         if(!cb)return;
         const d=load(),c=(d.checklists||[]).find(x=>x.id==cb.dataset.checklistId),i=c?.items?.[Number(cb.dataset.itemIndex)];
-        if(!i)return;
-        i.done=cb.checked;
-        try{localStorage.setItem(KEY,JSON.stringify(d));}catch{}
+        if(!i)return;i.done=cb.checked;try{localStorage.setItem(KEY,JSON.stringify(d));}catch{}
       });
     }
-    renderCareList();
-    renderFacility();
+    renderCareList();renderFacility();
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',install);else install();
 })();
