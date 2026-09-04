@@ -8,7 +8,7 @@
   const repeatLabels={daily:'Daily',every2days:'Every 2 days',weekly:'Every week',biweekly:'Every 2 weeks',monthly:'Every month',quarterly:'Every 3 months'};
   let careView='active';
   function taskText(t,d){return `${esc(t.date||'No date')}${t.repeat&&t.repeat!=='none'?' · '+esc(repeatLabels[t.repeat]||t.repeat):''}${t.pet?' · '+esc(petName(d,t.pet)):''}`}
-  function careCard(t,d,completed){return `<div class="card task"><button type="button" class="check tend-care-check" data-care-id="${t.id}" aria-label="${completed?'Mark incomplete':'Mark complete'}">${completed?'✓':''}</button><div style="flex:1" class="${completed?'done':''}"><b>${esc(t.title||'Care task')}</b><div class="muted">${taskText(t,d)}</div></div>${!completed?`<button type="button" onclick="window.careForm(${t.id})">Edit</button>`:''}</div>`}
+  function careCard(t,d,completed){return `<div class="card task"><button type="button" class="check tend-care-check" data-care-id="${t.id}" aria-label="${completed?'Mark incomplete':'Mark complete'}">${completed?'✓':''}</button><div style="flex:1" class="${completed?'done':''}"><b>${esc(t.title||'Care task')}</b><div class="muted">${taskText(t,d)}</div></div><div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end"><button type="button" class="tend-delete-care danger" data-care-id="${t.id}" aria-label="Delete care task">Delete</button>${!completed?`<button type="button" onclick="window.careForm(${t.id})">Edit</button>`:''}</div></div>`}
   function renderCareList(){
     const d=load(),box=document.getElementById('careList'),summary=document.getElementById('careSummary');
     if(!box)return;
@@ -19,6 +19,16 @@
     const activeHtml=open.length?open.map(t=>careCard(t,d,false)).join(''):'<div class="empty">No open care tasks. 🌱</div>';
     const completedHtml=done.length?done.map(t=>careCard(t,d,true)).join(''):'<div class="empty">No completed care tasks yet.</div>';
     box.innerHTML=tabs+(careView==='active'?activeHtml:completedHtml);
+  }
+  function deleteCare(id){
+    const d=load();
+    const task=(d.care||[]).find(t=>t.id==id);
+    if(!task)return;
+    if(!confirm(`Delete “${task.title||'Care task'}”? This cannot be undone.`))return;
+    d.care=(d.care||[]).filter(t=>t.id!=id);
+    try{localStorage.setItem(KEY,JSON.stringify(d));}catch{}
+    renderCareList();
+    if(window.refreshDashboard)window.refreshDashboard();
   }
   function renderFacility(){
     const d=load(),box=document.getElementById('facilityList');
@@ -33,6 +43,8 @@
       careList.addEventListener('click',function(e){
         const tab=e.target.closest('[data-care-view]');
         if(tab){e.preventDefault();careView=tab.dataset.careView;renderCareList();return;}
+        const del=e.target.closest('.tend-delete-care');
+        if(del){e.preventDefault();e.stopPropagation();deleteCare(del.dataset.careId);return;}
         const btn=e.target.closest('.tend-care-check');
         if(!btn)return;
         e.preventDefault();e.stopPropagation();
@@ -41,6 +53,7 @@
         setTimeout(renderCareList,20);
       });
     }
+    window.tendDeleteCare=deleteCare;
     if(window.refreshDashboard&&!window.tendDashboardBugfix){
       window.tendDashboardBugfix='1';
       const original=window.refreshDashboard;
