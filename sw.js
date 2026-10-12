@@ -1,4 +1,4 @@
-const CACHE='pcc-v27';
+const CACHE='pcc-v28';
 const ASSETS=['./','./index.html','./manifest.json','./enhancements.js','./enhancements.css','./bugfixes.js','./refresh.js'];
 self.addEventListener('install',event=>{event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(ASSETS)).then(()=>self.skipWaiting()))});
 self.addEventListener('activate',event=>{event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key!==CACHE).map(key=>caches.delete(key)))).then(()=>self.clients.claim()))});
